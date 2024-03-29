@@ -22,9 +22,10 @@ import xml.etree.ElementTree as ETree
 import zipfile
 from pathlib import Path
 
+import polib
 import requests
 
-version = "2024.03.24.2339"
+version = "2024.03.29.1841"
 
 available_launchers = [
     "lgc_api.exe",
@@ -32,6 +33,8 @@ available_launchers = [
 ]
 
 launcher_file = ""
+
+splitter_str = "*" * 25
 
 text_welcome_message = f'''战舰世界本地化安装器
 作者：北斗余晖
@@ -52,7 +55,7 @@ text_builtin_cfg = '''<locale_config>
 </locale_config>
 '''
 
-text_mo_source = '''汉化文件来源：
+text_mo_source = '''汉化文件来源（在线下载请关闭代理）：
 1.（实验性）下载最新[正式服]汉化文件；
 2.（实验性）下载最新[测试服]汉化文件；
 3.使用本地文件。
@@ -61,6 +64,8 @@ text_mo_source = '''汉化文件来源：
 text_mo_source_selection = "请选择汉化文件来源："
 
 text_use_builtin = "是否使用程序自带备用文件？输入Y以同意。若上次安装后游戏字符仍被显示为空心方块，请考虑使用备用文件。"
+
+text_apply_mods = "检测到l10n_installer/mods/下存在po文件，是否作为模组应用到汉化文件？输入Y以应用："
 
 text_general_installation_mode = '''全局安装模式
 1.快速安装（LESTA服）
@@ -152,6 +157,25 @@ def run():
     while not os.path.isfile(global_mo_path):
         print("mo文件读取失败，请重新选择mo来源。")
         global_mo_path = _fetch_l10n_mo()
+
+    mods = _check_mods()
+    if mods:
+        if input(text_apply_mods).lower() == "y":
+            source_mo = polib.mofile(global_mo_path)
+            for path in mods:
+                print(f"应用{path}到{global_mo_path}……")
+                try:
+                    _process_modification_file(source_mo, path)
+                except Exception as ex:
+                    print(f"应用模组“{path}”时发生异常！异常信息：{ex}")
+            print("修改完成，正在保存……")
+            modified_mo_path = f"l10n_installer/processed/modified_{time.time_ns()}.mo"
+            source_mo.save(modified_mo_path)
+            print(f"已保存到{modified_mo_path}。")
+            global_mo_path = modified_mo_path
+            print(f"mo来源变更为{modified_mo_path}。")
+        else:
+            print("跳过模组应用，使用原文件。")
 
     print(text_mode_selection)
     try:
@@ -362,7 +386,61 @@ def _download_mo(release: bool) -> str:
         return ""
 
 
-def get_report_choice(str_path: str) -> str:
+def _check_mods() -> list[str]:
+    files = os.listdir("l10n_installer/mods")
+    return [("l10n_installer/mods/" + file) for file in files if (file.endswith(".po") or file.endswith(".mo"))]
+
+
+def _notify_modification(msgid: str, old_str: str, new_str: str):
+    print("")
+    print(splitter_str)
+    print(f"修改“{msgid}”键：")
+    print(old_str)
+    print(">>>")
+    print(new_str)
+    print(splitter_str)
+    print("")
+
+
+def _notify_modification_plural(msgid: str, old_strs: list[str], new_strs: list[str]):
+    print("")
+    print(splitter_str)
+    print(f"修改“{msgid}”键：")
+    for o in old_strs:
+        print(o)
+    print(">>>")
+    for n in new_strs:
+        print(n)
+    print(splitter_str)
+    print("")
+
+
+def _process_modification_file(source_po, translated_path: str):
+    if translated_path.endswith("po"):
+        translated = polib.pofile(translated_path)
+    else:
+        translated = polib.mofile(translated_path)
+    translation_dict_singular = {entry.msgid: entry.msgstr for entry in translated if entry.msgid != ""}
+    translation_dict_plural: dict[str, list[str]] = {entry.msgid_plural: entry.msgstr_plural for entry in
+                                                     translated if entry.msgid_plural != ""}
+    singular_count = len(translation_dict_singular)
+    plural_count = len(translation_dict_singular)
+    for entry in source_po:
+        if singular_count != 0 and entry.msgid and entry.msgid in translation_dict_singular:
+            old_str = entry.msgstr
+            entry.msgstr = translation_dict_singular[entry.msgid]
+            _notify_modification(entry.msgid, old_str, entry.msgstr)
+            del translation_dict_singular[entry.msgid]
+            singular_count -= 1
+        if plural_count != 0 and entry.msgid_plural and entry.msgid_plural in translation_dict_plural:
+            old_strs = entry.msgstr_plural.copy()
+            entry.msgstr_plural = translation_dict_plural.get(entry.msgid_plural)
+            _notify_modification_plural(entry.msgid_plural, old_strs, entry.msgstr_plural)
+            del translation_dict_plural[entry.msgid_plural]
+            plural_count -= 1
+
+
+def _get_report_choice(str_path: str) -> str:
     return f'''
 日志文件位于{Path(str_path).absolute().resolve()}
 您可以直接退出程序，或进行以下操作：
@@ -387,6 +465,8 @@ class SavedOut(object):
 
 os.makedirs('l10n_installer/downloads', exist_ok=True)
 os.makedirs('l10n_installer/logs', exist_ok=True)
+os.makedirs('l10n_installer/mods', exist_ok=True)
+os.makedirs('l10n_installer/processed', exist_ok=True)
 log_file_path = f'l10n_installer/logs/output_{time.time_ns()}.log'
 with open(log_file_path, 'w') as log:
     exit_with_confirm = True
@@ -399,7 +479,7 @@ with open(log_file_path, 'w') as log:
                 exit_with_confirm = False
                 subprocess.run(launcher_file)
     except Exception as e:
-        feedback = input(f"发生异常！异常信息：\n{e}\n" + get_report_choice(log_file_path))
+        feedback = input(f"发生异常！异常信息：\n{e}\n" + _get_report_choice(log_file_path))
         if feedback == "1":
             webbrowser.open("https://gitee.com/nova-committee/korabli-LESTA-L10N/issues/new")
         elif feedback == "2":
