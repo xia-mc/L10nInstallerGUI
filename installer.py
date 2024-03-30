@@ -25,7 +25,7 @@ from pathlib import Path
 import polib
 import requests
 
-version = "2024.03.29.1841"
+version = "2024.03.30.1524"
 
 available_launchers = [
     "lgc_api.exe",
@@ -65,7 +65,7 @@ text_mo_source_selection = "请选择汉化文件来源："
 
 text_use_builtin = "是否使用程序自带备用文件？输入Y以同意。若上次安装后游戏字符仍被显示为空心方块，请考虑使用备用文件。"
 
-text_apply_mods = "检测到l10n_installer/mods/下存在po文件，是否作为模组应用到汉化文件？输入Y以应用："
+text_apply_mods = "是否将l10n_installer/mods/下的模组应用到汉化文件？输入Y并按回车以应用："
 
 text_general_installation_mode = '''全局安装模式
 1.快速安装（LESTA服）
@@ -158,10 +158,11 @@ def run():
         print("mo文件读取失败，请重新选择mo来源。")
         global_mo_path = _fetch_l10n_mo()
 
-    mods = _check_mods()
-    if mods:
-        if input(text_apply_mods).lower() == "y":
+    if input(text_apply_mods).lower() == "y":
+        mods = _check_mods()
+        if mods:
             source_mo = polib.mofile(global_mo_path)
+            print(f"找到{len(mods)}个po/mo模组")
             for path in mods:
                 print(f"应用{path}到{global_mo_path}……")
                 try:
@@ -171,11 +172,11 @@ def run():
             print("修改完成，正在保存……")
             modified_mo_path = f"l10n_installer/processed/modified_{time.time_ns()}.mo"
             source_mo.save(modified_mo_path)
-            print(f"已保存到{modified_mo_path}。")
+            print(f"修改后的本地化文件已保存到{modified_mo_path}。")
             global_mo_path = modified_mo_path
             print(f"mo来源变更为{modified_mo_path}。")
         else:
-            print("跳过模组应用，使用原文件。")
+            print("未在l10n_installer/mods找到有效的po/mo本地化模组，使用原文件。")
 
     print(text_mode_selection)
     try:
@@ -479,7 +480,7 @@ with open(log_file_path, 'w') as log:
                 exit_with_confirm = False
                 subprocess.run(launcher_file)
     except Exception as e:
-        feedback = input(f"发生异常！异常信息：\n{e}\n" + _get_report_choice(log_file_path))
+        feedback = input(f"发生异常！异常信息：\n{e}\n\n" + _get_report_choice(log_file_path))
         if feedback == "1":
             webbrowser.open("https://gitee.com/nova-committee/korabli-LESTA-L10N/issues/new")
         elif feedback == "2":
