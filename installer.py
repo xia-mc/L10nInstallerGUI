@@ -25,7 +25,7 @@ from pathlib import Path
 import polib
 import requests
 
-version = "2024.03.30.1524"
+version = "2024.03.30.1528"
 
 available_launchers = [
     "lgc_api.exe",
@@ -177,6 +177,8 @@ def run():
             print(f"mo来源变更为{modified_mo_path}。")
         else:
             print("未在l10n_installer/mods找到有效的po/mo本地化模组，使用原文件。")
+    else:
+        print("跳过模组应用，使用原文件。")
 
     print(text_mode_selection)
     try:
