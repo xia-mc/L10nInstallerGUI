@@ -25,7 +25,7 @@ from pathlib import Path
 import polib
 import requests
 
-version = "2024.03.30.1528"
+version = "2024.04.07.1440"
 
 available_launchers = [
     "lgc_api.exe",
@@ -345,7 +345,7 @@ def _modify_cfg(cfg_path_old: Path, cfg_path_new: Path, backup: bool) -> bool:
 def _fetch_l10n_mo() -> str:
     print(text_mo_source)
     selection = input(text_mo_source_selection)
-    if selection == '1' or '2':
+    if selection == '1' or selection == '2':
         return _download_mo(selection == '1')
     return input("请输入您下载的mo文件的绝对路径，您可以尝试将文件直接拖入本程序运行的命令行页面以快速输入：")
 
