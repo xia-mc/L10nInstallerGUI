@@ -25,7 +25,7 @@ from pathlib import Path
 import polib
 import requests
 
-version = "2024.04.07.1440"
+version = "2024.04.08.1105"
 
 available_launchers = [
     "lgc_api.exe",
@@ -68,9 +68,10 @@ text_use_builtin = "是否使用程序自带备用文件？输入Y以同意。�
 text_apply_mods = "是否将l10n_installer/mods/下的模组应用到汉化文件？输入Y并按回车以应用："
 
 text_general_installation_mode = '''全局安装模式
-1.快速安装（LESTA服）
-2.自定义安装
-3.退出程序
+1.快速安装（LESTA正式服）
+2.快速安装（LESTA测试服）
+3.自定义安装
+4.退出程序
 '''
 
 text_server_list = '''服务器列表：
@@ -180,36 +181,51 @@ def run():
     else:
         print("跳过模组应用，使用原文件。")
 
-    print(text_mode_selection)
+    installation_locale = None
+    installation_cfg = None
+    server = None
+    use_builtin_cfg = None
+
+    print(text_general_installation_mode)
     try:
-        mode = int(input(text_general_installation_mode))
+        mode = int(input(text_mode_selection))
     except ValueError:
-        mode = 2
-    if mode == 3:
+        print("输入错误，默认为自定义安装")
+        mode = 3
+    if mode == 4:
         return
-    quick = mode == 1
-    installation = 0
-    server = "ru"
-    if not quick:
+    if mode == 1:
+        installation_locale = 1
+        installation_cfg = 1
+        server = "ru"
+        use_builtin_cfg = True
+    elif mode == 2:
+        installation_locale = 2
+        installation_cfg = 2
+        server = "ru"
+        use_builtin_cfg = True
+    if not server:
         print(text_server_list)
         try:
             server = server_dict.get(input(text_select_server))
         except ValueError:
             server = server_dict.get('1')
             print("输入错误，默认为LESTA服")
+
+    if not installation_locale:
         print(text_mo_replace_mode)
         try:
-            installation = int(input(text_mode_selection))
+            installation_locale = int(input(text_mode_selection))
         except ValueError:
-            installation = 0
+            installation_locale = 3
 
-    if quick or installation == 1:
+    if installation_locale == 1:
         shutil.copy(global_mo_path, _get_res_mods_mo_path(first, server))
         if second_dir_exists:
             shutil.copy(global_mo_path, _get_res_mods_mo_path(second, server))
-        if not quick:
+        if not installation_cfg:
             input("汉化文件安装完成，请不要退出程序，按回车键继续。")
-    elif installation == 2:
+    elif installation_locale == 2:
         first_mo_path = _get_mo_path(first, server)
         first_mo_found = os.path.isfile(first_mo_path)
         if not first_mo_found:
@@ -226,34 +242,33 @@ def run():
             else:
                 shutil.copy(second_mo_path, str(second_mo_path) + ".old")
             shutil.copy(global_mo_path, second_mo_path)
-        input("汉化文件安装完成，请不要退出程序，按回车键继续。")
+        if not installation_cfg:
+            input("汉化文件安装完成，请不要退出程序，按回车键继续。")
     else:
         input("已跳过汉化文件安装，按回车键继续。")
 
-    needs_locale = server == "ru"
+    needs_cfg = server == "ru"
 
-    if not quick:
-        if not needs_locale:
-            installation = 0
+    if not installation_cfg:
+        if not needs_cfg:
+            installation_cfg = 0
         else:
             print(text_locale_cfg_replace_mode)
             try:
-                installation = int(input(text_mode_selection))
+                installation_cfg = int(input(text_mode_selection))
             except ValueError:
-                installation = 0
+                installation_cfg = 0
 
-    use_builtin_cfg = False
+    if needs_cfg and not use_builtin_cfg:
+        use_builtin_cfg = input(text_use_builtin).lower() == "y"
 
-    if needs_locale:
-        use_builtin_cfg = quick or input(text_use_builtin).lower() == "y"
-
-    if needs_locale and (quick or installation == 1 or installation == 2):
+    if needs_cfg and installation_cfg != 0:
         first_cfg_path = _get_locale_cfg_path(first)
         second_cfg_path = _get_locale_cfg_path(second)
         if not use_builtin_cfg and not os.path.isfile(first_cfg_path) and not os.path.isfile(second_cfg_path):
             print("未在指定的文件夹下找到locale_config.xml文件，将使用程序自带的备用文件。")
             use_builtin_cfg = True
-        if installation == 2:
+        if installation_cfg == 2:
             if not use_builtin_cfg:
                 if not _modify_cfg(first_cfg_path, first_cfg_path, True):
                     use_builtin_cfg = True
