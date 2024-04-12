@@ -1,5 +1,5 @@
 # Consumable Camouflage replacer
-# Copyright (C) 2024 MikhailTapio
+# Copyright © 2024 MikhailTapio
 #
 # This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General
 # Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option)
@@ -25,7 +25,7 @@ from pathlib import Path
 import polib
 import requests
 
-version = "2024.04.08.1105"
+version = "2024.04.12.1100"
 
 available_launchers = [
     "lgc_api.exe",
