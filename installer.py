@@ -25,7 +25,7 @@ from pathlib import Path
 import polib
 import requests
 
-version = "2024.04.12.1100"
+version = "2024.04.19.0956"
 
 available_launchers = [
     "lgc_api.exe",
@@ -40,8 +40,7 @@ text_welcome_message = f'''战舰世界本地化安装器
 作者：北斗余晖
 版本：{version}
 许可证：GNU-AGPL-3.0-only
-源代码地址：https://github.com/Nova-Committee/Korabli-LESTA-L10N/tree/Installer
-（国内访问：https://gitee.com/nova-committee/korabli-LESTA-L10N/tree/Installer）
+源代码地址：https://github.com/LocalizedKorabli/L10nInstaller
 '''
 
 text_builtin_cfg = '''<locale_config>
@@ -486,7 +485,7 @@ os.makedirs('l10n_installer/logs', exist_ok=True)
 os.makedirs('l10n_installer/mods', exist_ok=True)
 os.makedirs('l10n_installer/processed', exist_ok=True)
 log_file_path = f'l10n_installer/logs/output_{time.time_ns()}.log'
-with open(log_file_path, 'w') as log:
+with open(log_file_path, 'w', encoding="utf-8") as log:
     exit_with_confirm = True
     sys.stdout = SavedOut(sys.stdout, log)
     try:
