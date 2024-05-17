@@ -25,7 +25,7 @@ from pathlib import Path
 import polib
 import requests
 
-version = "2024.04.19.0956"
+version = "2024.05.17.1941"
 
 available_launchers = [
     "lgc_api.exe",
@@ -34,7 +34,7 @@ available_launchers = [
 
 launcher_file = ""
 
-splitter_str = "*" * 25
+splitter_str = "*" * 36
 
 text_welcome_message = f'''战舰世界本地化安装器
 作者：北斗余晖
@@ -384,6 +384,33 @@ def _download_mo(release: bool) -> str:
             print("下载完成！解压中……")
             with zipfile.ZipFile(output_file, 'r') as mo_zip:
                 extracted_file = f"l10n_installer/downloads/global_{suffix}.mo"
+                manifest_files = [info for info in mo_zip.filelist if info.filename.endswith("MANIFEST.MF")]
+                if manifest_files:
+                    manifest_file_name = manifest_files[0].filename
+                    mo_zip.extract(manifest_file_name, "l10n_installer/downloads")
+                    properties: dict[str, str] = {}
+                    with open(os.path.join("l10n_installer/downloads", manifest_file_name), 'r', encoding='utf-8') \
+                            as file:
+                        for line in file:
+                            if line.strip() and not line.strip().startswith('#'):
+                                key, value = line.strip().split(':', 1)
+                                properties[key] = value.strip()
+                    if len(properties) > 0:
+                        print(splitter_str)
+                        print("汉化包信息：")
+                        prop_title = properties["Title"]
+                        if prop_title:
+                            print(f"项目名：{prop_title}")
+                        prop_author = properties["Author"]
+                        if prop_author:
+                            print(f"项目作者：{prop_author}")
+                        prop_timestamp = properties["Timestamp"]
+                        if prop_timestamp:
+                            timestamp_splitted = prop_timestamp.split('T')
+                            timestamp_date = timestamp_splitted[0]
+                            timestamp_time = timestamp_splitted[1].split('+')[0]
+                            print(f"打包时间：{timestamp_date} {timestamp_time}")
+                        print(splitter_str)
                 mo_files = [info for info in mo_zip.filelist if info.filename.endswith('.mo')]
                 if mo_files:
                     mo_file_name = mo_files[0].filename
@@ -419,7 +446,7 @@ def _notify_modification(msgid: str, old_str: str, new_str: str):
     print("")
 
 
-def _notify_modification_plural(msgid: str, old_strs: list[str], new_strs: list[str]):
+def _notify_modification_plural(msgid: str, old_strs: dict[int, str], new_strs: dict[int, str]):
     print("")
     print(splitter_str)
     print(f"修改“{msgid}”键：")
@@ -432,11 +459,31 @@ def _notify_modification_plural(msgid: str, old_strs: list[str], new_strs: list[
     print("")
 
 
+def _notify_addition(msgid: str, new_str: str):
+    print("")
+    print(splitter_str)
+    print(f"添加“{msgid}”键：")
+    print(new_str)
+    print(splitter_str)
+    print("")
+
+
+def _notify_addition_plural(msgid: str, new_strs: dict[int, str]):
+    print("")
+    print(splitter_str)
+    print(f"添加“{msgid}”键：")
+    for n in new_strs:
+        print(n)
+    print(splitter_str)
+    print("")
+
+
 def _process_modification_file(source_po, translated_path: str):
     if translated_path.endswith("po"):
         translated = polib.pofile(translated_path)
     else:
         translated = polib.mofile(translated_path)
+    source_dict_singular = {entry.msgid: entry.msgstr for entry in source_po}
     translation_dict_singular = {entry.msgid: entry.msgstr for entry in translated if entry.msgid != ""}
     translation_dict_plural: dict[str, list[str]] = {entry.msgid_plural: entry.msgstr_plural for entry in
                                                      translated if entry.msgid_plural != ""}
@@ -445,16 +492,28 @@ def _process_modification_file(source_po, translated_path: str):
     for entry in source_po:
         if singular_count != 0 and entry.msgid and entry.msgid in translation_dict_singular:
             old_str = entry.msgstr
-            entry.msgstr = translation_dict_singular[entry.msgid]
-            _notify_modification(entry.msgid, old_str, entry.msgstr)
+            target_str = translation_dict_singular[entry.msgid]
             del translation_dict_singular[entry.msgid]
             singular_count -= 1
+            if entry.msgid == "IDS_RIGHTS_RESERVED":
+                continue
+            entry.msgstr = target_str
+            _notify_modification(entry.msgid, old_str, entry.msgstr)
         if plural_count != 0 and entry.msgid_plural and entry.msgid_plural in translation_dict_plural:
             old_strs = entry.msgstr_plural.copy()
             entry.msgstr_plural = translation_dict_plural.get(entry.msgid_plural)
             _notify_modification_plural(entry.msgid_plural, old_strs, entry.msgstr_plural)
             del translation_dict_plural[entry.msgid_plural]
             plural_count -= 1
+    if singular_count > 0 or plural_count > 0:
+        for t_entry in translated:
+            if t_entry.msgid and t_entry.msgid not in source_dict_singular:
+                source_po.append(t_entry)
+                if entry.msgid_plural and entry.msgid_plural != "":
+                    _notify_addition_plural(t_entry.msgid, t_entry.msgstr_plural)
+                else:
+                    _notify_addition(t_entry.msgid, t_entry.msgstr)
+    source_po.sort()
 
 
 def _get_report_choice(str_path: str) -> str:
