@@ -17,6 +17,8 @@ import subprocess
 import sys
 import time
 import urllib.request
+# pip install urllib3==1.25.11
+# The newer urllib has break changes.
 import webbrowser
 import xml.etree.ElementTree as ETree
 import zipfile
@@ -25,7 +27,7 @@ from pathlib import Path
 import polib
 import requests
 
-version = "2024.05.17.1941"
+version = "2024.05.29.0049"
 
 available_launchers = [
     "lgc_api.exe",
@@ -54,7 +56,7 @@ text_builtin_cfg = '''<locale_config>
 </locale_config>
 '''
 
-text_mo_source = '''汉化文件来源（在线下载请关闭代理）：
+text_mo_source = '''汉化文件来源：
 1.（实验性）下载最新[正式服]汉化文件；
 2.（实验性）下载最新[测试服]汉化文件；
 3.使用本地文件。
@@ -370,7 +372,7 @@ def _download_mo(release: bool) -> str:
     output_file = f"l10n_installer/downloads/l10n_{suffix}.zip"
     artifact_url = "https://maven.nova-committee.cn/releases/korabli/localized/l10n/" \
                    f"{artifact_version}/l10n-{artifact_version}.jar"
-    proxies = {scheme: f"{scheme}://{proxy}" for scheme, proxy in urllib.request.getproxies().items()}
+    proxies = {scheme: proxy for scheme, proxy in urllib.request.getproxies().items()}
     print("连接中……")
     try:
         response = requests.get(artifact_url, proxies=proxies)
@@ -398,19 +400,25 @@ def _download_mo(release: bool) -> str:
                     if len(properties) > 0:
                         print(splitter_str)
                         print("汉化包信息：")
-                        prop_title = properties["Title"]
+                        prop_title = properties.get("Title")
                         if prop_title:
                             print(f"项目名：{prop_title}")
-                        prop_author = properties["Author"]
+                        prop_author = properties.get("Author")
                         if prop_author:
                             print(f"项目作者：{prop_author}")
-                        prop_timestamp = properties["Timestamp"]
+                        prop_timestamp = properties.get("Timestamp")
                         if prop_timestamp:
                             timestamp_splitted = prop_timestamp.split('T')
                             timestamp_date = timestamp_splitted[0]
                             timestamp_time = timestamp_splitted[1].split('+')[0]
                             print(f"打包时间：{timestamp_date} {timestamp_time}")
                         print(splitter_str)
+                        prop_message = properties.get("Message")
+                        if prop_message and prop_message.replace(" ", "") != "":
+                            print("")
+                            print("来自服务器的消息：")
+                            print(prop_message)
+
                 mo_files = [info for info in mo_zip.filelist if info.filename.endswith('.mo')]
                 if mo_files:
                     mo_file_name = mo_files[0].filename
