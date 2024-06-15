@@ -27,7 +27,10 @@ from pathlib import Path
 import polib
 import requests
 
-version = "2024.05.29.0049"
+version = "2024.06.15.1337"
+
+base_path: str = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
+resource_path: str = os.path.join(base_path, "resources")
 
 available_launchers = [
     "lgc_api.exe",
@@ -57,7 +60,7 @@ text_builtin_cfg = '''<locale_config>
 '''
 
 text_mo_source = '''汉化文件来源：
-1.（实验性）下载最新[正式服]汉化文件；
+1.（实验性，默认）下载最新[正式服]汉化文件；
 2.（实验性）下载最新[测试服]汉化文件；
 3.使用本地文件。
 '''
@@ -66,10 +69,10 @@ text_mo_source_selection = "请选择汉化文件来源："
 
 text_use_builtin = "是否使用程序自带备用文件？输入Y以同意。若上次安装后游戏字符仍被显示为空心方块，请考虑使用备用文件。"
 
-text_apply_mods = "是否将l10n_installer/mods/下的模组应用到汉化文件？输入Y并按回车以应用："
+text_apply_mods = "是否将l10n_installer/mods/下的模组应用到汉化文件？留空或输入Y，并按回车以应用："
 
 text_general_installation_mode = '''全局安装模式
-1.快速安装（LESTA正式服）
+1.（默认）快速安装（LESTA正式服）
 2.快速安装（LESTA测试服）
 3.自定义安装
 4.退出程序
@@ -160,7 +163,8 @@ def run():
         print("mo文件读取失败，请重新选择mo来源。")
         global_mo_path = _fetch_l10n_mo()
 
-    if input(text_apply_mods).lower() == "y":
+    apply_mods = input(text_apply_mods)
+    if apply_mods == '' or apply_mods.lower() == "y":
         mods = _check_mods()
         if mods:
             source_mo = polib.mofile(global_mo_path)
@@ -189,7 +193,11 @@ def run():
 
     print(text_general_installation_mode)
     try:
-        mode = int(input(text_mode_selection))
+        selected = input(text_mode_selection)
+        if selected == '':
+            mode = 1
+        else:
+            mode = int(input(text_mode_selection))
     except ValueError:
         print("输入错误，默认为自定义安装")
         mode = 3
@@ -219,6 +227,15 @@ def run():
             installation_locale = int(input(text_mode_selection))
         except ValueError:
             installation_locale = 3
+
+    logo_path_1 = Path("bin").joinpath(first).joinpath("res_mods").joinpath("gui").joinpath("game_loading")
+    os.makedirs(logo_path_1, exist_ok=True)
+    shutil.copy(os.path.join(resource_path, "game_logo.svg"), logo_path_1.joinpath("game_logo.svg"))
+    shutil.copy(os.path.join(resource_path, "game_logo_static.svg"), logo_path_1.joinpath("game_logo_static.svg"))
+    logo_path_2 = Path("bin").joinpath(second).joinpath("res_mods").joinpath("gui").joinpath("game_loading")
+    os.makedirs(logo_path_2, exist_ok=True)
+    shutil.copy(os.path.join(resource_path, "game_logo.svg"), logo_path_2.joinpath("game_logo.svg"))
+    shutil.copy(os.path.join(resource_path, "game_logo_static.svg"), logo_path_2.joinpath("game_logo_static.svg"))
 
     if installation_locale == 1:
         shutil.copy(global_mo_path, _get_res_mods_mo_path(first, server))
@@ -361,8 +378,9 @@ def _modify_cfg(cfg_path_old: Path, cfg_path_new: Path, backup: bool) -> bool:
 def _fetch_l10n_mo() -> str:
     print(text_mo_source)
     selection = input(text_mo_source_selection)
-    if selection == '1' or selection == '2':
-        return _download_mo(selection == '1')
+    release_selected = selection == '1' or selection == ''
+    if release_selected or selection == '2':
+        return _download_mo(release_selected)
     return input("请输入您下载的mo文件的绝对路径，您可以尝试将文件直接拖入本程序运行的命令行页面以快速输入：")
 
 
@@ -547,6 +565,7 @@ class SavedOut(object):
             file.flush()
 
 
+os.makedirs('l10n_installer/cache', exist_ok=True)
 os.makedirs('l10n_installer/downloads', exist_ok=True)
 os.makedirs('l10n_installer/logs', exist_ok=True)
 os.makedirs('l10n_installer/mods', exist_ok=True)
