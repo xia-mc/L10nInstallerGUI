@@ -27,7 +27,7 @@ from pathlib import Path
 import polib
 import requests
 
-version = "2024.06.15.1337"
+version = "2024.06.21.0958"
 
 base_path: str = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
 resource_path: str = os.path.join(base_path, "resources")
@@ -197,7 +197,7 @@ def run():
         if selected == '':
             mode = 1
         else:
-            mode = int(input(text_mode_selection))
+            mode = int(selected)
     except ValueError:
         print("输入错误，默认为自定义安装")
         mode = 3
@@ -232,10 +232,11 @@ def run():
     os.makedirs(logo_path_1, exist_ok=True)
     shutil.copy(os.path.join(resource_path, "game_logo.svg"), logo_path_1.joinpath("game_logo.svg"))
     shutil.copy(os.path.join(resource_path, "game_logo_static.svg"), logo_path_1.joinpath("game_logo_static.svg"))
-    logo_path_2 = Path("bin").joinpath(second).joinpath("res_mods").joinpath("gui").joinpath("game_loading")
-    os.makedirs(logo_path_2, exist_ok=True)
-    shutil.copy(os.path.join(resource_path, "game_logo.svg"), logo_path_2.joinpath("game_logo.svg"))
-    shutil.copy(os.path.join(resource_path, "game_logo_static.svg"), logo_path_2.joinpath("game_logo_static.svg"))
+    if second_dir_exists:
+        logo_path_2 = Path("bin").joinpath(second).joinpath("res_mods").joinpath("gui").joinpath("game_loading")
+        os.makedirs(logo_path_2, exist_ok=True)
+        shutil.copy(os.path.join(resource_path, "game_logo.svg"), logo_path_2.joinpath("game_logo.svg"))
+        shutil.copy(os.path.join(resource_path, "game_logo_static.svg"), logo_path_2.joinpath("game_logo_static.svg"))
 
     if installation_locale == 1:
         shutil.copy(global_mo_path, _get_res_mods_mo_path(first, server))
