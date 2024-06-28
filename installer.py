@@ -10,7 +10,7 @@
 #
 # You should have received a copy of the GNU General Public License along with this program. If not,
 # see <https://www.gnu.org/licenses/>.
-
+import json
 import os.path
 import shutil
 import subprocess
@@ -27,7 +27,7 @@ from pathlib import Path
 import polib
 import requests
 
-version = "2024.06.28.1032"
+version = "2024.06.28.1800"
 
 base_path: str = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
 resource_path: str = os.path.join(base_path, "resources")
@@ -67,12 +67,64 @@ text_mo_source = '''汉化文件来源：
 
 text_mo_source_selection = "请选择汉化文件来源："
 
-text_download_server = '''下载服务器：
-1.（默认）湖南S3
-2.（备用）香港
-'''
+download_servers = {
+    "r": [
+        {
+            "name": "Gitee",
+            "url": "https://gitee.com/localized-korabli/Korabli-LESTA-L10N/raw/main/Localizations/latest/global.mo",
+            "wrapped": False,
+            "delay": True
+        },
+        {
+            "name": "湖北S3",
+            "url": "https://maven.nova-committee.cn/s3/korabli/localized/l10n/1.0.0/l10n-1.0.0.jar",
+            "wrapped": True,
+            "delay": False
+        },
+        {
+            "name": "香港",
+            "url": "https://maven.nova-committee.cn/releases/korabli/localized/l10n/1.0.0/l10n-1.0.0.jar",
+            "wrapped": True,
+            "delay": False
+        },
+        {
+            "name": "GitHub",
+            "url": "https://github.com/LocalizedKorabli/Korabli-LESTA-L10N/raw/main/Localizations/latest/global.mo",
+            "wrapped": False,
+            "delay": False
+        }
+    ],
+    "pt": [
+        {
+            "name": "Gitee",
+            "url": "https://gitee.com/localized-korabli/Korabli-LESTA-L10N-PublicTest/raw/Localizations/Localizations"
+                   "/latest/global.mo",
+            "wrapped": False,
+            "delay": True
+        },
+        {
+            "name": "湖北S3",
+            "url": "https://maven.nova-committee.cn/s3/korabli/localized/l10n/2.0.0/l10n-2.0.0.jar",
+            "wrapped": True,
+            "delay": False
+        },
+        {
+            "name": "香港",
+            "url": "https://maven.nova-committee.cn/releases/korabli/localized/l10n/2.0.0/l10n-2.0.0.jar",
+            "wrapped": True,
+            "delay": False
+        },
+        {
+            "name": "GitHub",
+            "url": "https://github.com/LocalizedKorabli/Korabli-LESTA-L10N-PublicTest/raw/Localizations/Localizations"
+                   "/latest/global.mo",
+            "wrapped": False,
+            "delay": False
+        }
+    ]
+}
 
-text_download_server_selection = "请选择下载服务器："
+text_download_server_selection = "请选择下载线路："
 
 text_use_builtin = "是否使用程序自带备用文件？输入Y以同意。若上次安装后游戏字符仍被显示为空心方块，请考虑使用备用文件。"
 
@@ -404,23 +456,48 @@ def _fetch_l10n_mo() -> str:
     selection = input(text_mo_source_selection)
     release_selected = selection == '1' or selection == ''
     if release_selected or selection == '2':
-        print(text_download_server)
-        download_server_selection = input(text_download_server_selection)
-        return _download_mo(release_selected, download_server_selection != '2')
+        download_settings: list[dict[str, str]] = _get_download_settings().get('r' if release_selected else 'pt')
+        _list_download_server(download_settings)
+        download_server_selection_raw = input(text_download_server_selection)
+        if download_server_selection_raw == '0':
+            return ""
+        download_server_selection = 0 if download_server_selection_raw == '' else (
+                    int(download_server_selection_raw) - 1)
+        server: dict[str, str] = download_settings[download_server_selection]
+        return _download_mo(release_selected, server.get('url'), server.get('wrapped'), server.get('delay'))
     return input("请输入您下载的mo文件的绝对路径，您可以尝试将文件直接拖入本程序运行的命令行页面以快速输入：")
 
 
-def _download_mo(release: bool, main: bool) -> str:
-    suffix = "release" if release else "pt"
-    artifact_version = "1.0.0" if release else "2.0.0"
-    output_file = f"l10n_installer/downloads/l10n_{suffix}.zip"
-    server_type = "s3" if main else "releases"
-    artifact_url = f"https://maven.nova-committee.cn/{server_type}/korabli/localized/l10n/" \
-                   f"{artifact_version}/l10n-{artifact_version}.jar"
+def _list_download_server(download_settings: list[dict[str, str]]):
+    if len(download_settings) == 0:
+        print("配置文件中没有适用于该类型的下载路线！输入0并回车以重新选择。")
+    else:
+        print("下载线路：")
+        i = 0
+        for server in download_settings:
+            defaulted = "（默认）" if i == 0 else ""
+            server_name = server.get("name")
+            print(f"{i + 1}. {defaulted}{server_name}")
+            i += 1
+
+
+def _get_download_settings() -> dict[str, list[dict[str, str]]]:
+    if not os.path.isfile('l10n_installer/settings/download.json'):
+        with open('l10n_installer/settings/download.json', 'w', encoding='utf-8') as file:
+            json.dump(download_servers, file, ensure_ascii=False, indent=4)
+    with open('l10n_installer/settings/download.json', 'r', encoding='utf-8') as file:
+        return json.load(file)
+
+
+def _download_mo(release: bool, url: str, wrapped: bool, delay: bool) -> str:
+    f_suffix = "release" if release else "pt"
+    f_prefix = "l10n_" if wrapped else "global_"
+    f_ext = "zip" if wrapped else "mo"
+    output_file = f"l10n_installer/downloads/{f_prefix}{f_suffix}.{f_ext}"
     proxies = {scheme: proxy for scheme, proxy in urllib.request.getproxies().items()}
     print("连接中……")
     try:
-        response = requests.get(artifact_url, proxies=proxies)
+        response = requests.get(url, stream=True, proxies=proxies)
         status = response.status_code
         if status == 200:
             print("连接成功，开始下载……")
@@ -428,56 +505,62 @@ def _download_mo(release: bool, main: bool) -> str:
                 for chunk in response.iter_content(chunk_size=1024):
                     if chunk:
                         f.write(chunk)
-            print("下载完成！解压中……")
-            with zipfile.ZipFile(output_file, 'r') as mo_zip:
-                extracted_file = f"l10n_installer/downloads/global_{suffix}.mo"
-                manifest_files = [info for info in mo_zip.filelist if info.filename.endswith("MANIFEST.MF")]
-                if manifest_files:
-                    manifest_file_name = manifest_files[0].filename
-                    mo_zip.extract(manifest_file_name, "l10n_installer/downloads")
-                    properties: dict[str, str] = {}
-                    with open(os.path.join("l10n_installer/downloads", manifest_file_name), 'r', encoding='utf-8') \
-                            as file:
-                        for line in file:
-                            if line.strip() and not line.strip().startswith('#'):
-                                key, value = line.strip().split(':', 1)
-                                properties[key] = value.strip()
-                    if len(properties) > 0:
-                        print(splitter_str)
-                        print("汉化包信息：")
-                        prop_title = properties.get("Title")
-                        if prop_title:
-                            print(f"项目名：{prop_title}")
-                        prop_author = properties.get("Author")
-                        if prop_author:
-                            print(f"项目作者：{prop_author}")
-                        prop_version = properties.get("Version")
-                        if prop_version:
-                            print(f"适用版本：{prop_version}")
-                        prop_timestamp = properties.get("Timestamp")
-                        if prop_timestamp:
-                            timestamp_splitted = prop_timestamp.split('T')
-                            timestamp_date = timestamp_splitted[0]
-                            timestamp_time = timestamp_splitted[1].split('+')[0]
-                            print(f"打包时间：{timestamp_date} {timestamp_time}")
-                        print(splitter_str)
-                        prop_message = properties.get("Message")
-                        if prop_message and prop_message.replace(" ", "") != "":
-                            print("")
-                            print("来自服务器的消息：")
-                            print(prop_message)
+            extracted_file = f"l10n_installer/downloads/global_{f_suffix}.mo"
+            print("下载完成！")
+            if delay:
+                print("请注意，考虑到同步延迟，该线路下载的文件可能不是最新版本。")
+            if wrapped:
+                print("解压中……")
+                with zipfile.ZipFile(output_file, 'r') as mo_zip:
+                    manifest_files = [info for info in mo_zip.filelist if info.filename.endswith("MANIFEST.MF")]
+                    if manifest_files:
+                        manifest_file_name = manifest_files[0].filename
+                        mo_zip.extract(manifest_file_name, "l10n_installer/downloads")
+                        properties: dict[str, str] = {}
+                        with open(os.path.join("l10n_installer/downloads", manifest_file_name), 'r', encoding='utf-8') \
+                                as file:
+                            for line in file:
+                                if line.strip() and not line.strip().startswith('#'):
+                                    key, value = line.strip().split(':', 1)
+                                    properties[key] = value.strip()
+                        if len(properties) > 0:
+                            print(splitter_str)
+                            print("汉化包信息：")
+                            prop_title = properties.get("Title")
+                            if prop_title:
+                                print(f"项目名：{prop_title}")
+                            prop_author = properties.get("Author")
+                            if prop_author:
+                                print(f"项目作者：{prop_author}")
+                            prop_version = properties.get("Version")
+                            if prop_version:
+                                print(f"适用版本：{prop_version}")
+                            prop_timestamp = properties.get("Timestamp")
+                            if prop_timestamp:
+                                timestamp_splitted = prop_timestamp.split('T')
+                                timestamp_date = timestamp_splitted[0]
+                                timestamp_time = timestamp_splitted[1].split('+')[0]
+                                print(f"打包时间：{timestamp_date} {timestamp_time}")
+                            print(splitter_str)
+                            prop_message = properties.get("Message")
+                            if prop_message and prop_message.replace(" ", "") != "":
+                                print("")
+                                print("来自服务器的消息：")
+                                print(prop_message)
 
-                mo_files = [info for info in mo_zip.filelist if info.filename.endswith('.mo')]
-                if mo_files:
-                    mo_file_name = mo_files[0].filename
-                    mo_zip.extract(mo_file_name, "l10n_installer/downloads")
-                    shutil.move(os.path.join("l10n_installer/downloads", mo_file_name),
-                                os.path.join("l10n_installer/downloads", f'global_{suffix}.mo'))
-                    print("解压完成！")
-                    return extracted_file
-                else:
-                    print("未在已下载的文件中找到mo文件！请尝试重新下载，或与开发者联系。")
-                    return ""
+                    mo_files = [info for info in mo_zip.filelist if info.filename.endswith('.mo')]
+                    if mo_files:
+                        mo_file_name = mo_files[0].filename
+                        mo_zip.extract(mo_file_name, "l10n_installer/downloads")
+                        shutil.move(os.path.join("l10n_installer/downloads", mo_file_name),
+                                    os.path.join("l10n_installer/downloads", f'global_{f_suffix}.mo'))
+                        print("解压完成！")
+                        return extracted_file
+                    else:
+                        print("未在已下载的文件中找到mo文件！请尝试重新下载，或与开发者联系。")
+                        return ""
+            else:
+                return extracted_file
         else:
             print(f"连接失败，返回状态码：{status}")
             return ""
@@ -599,6 +682,7 @@ os.makedirs('l10n_installer/downloads', exist_ok=True)
 os.makedirs('l10n_installer/logs', exist_ok=True)
 os.makedirs('l10n_installer/mods', exist_ok=True)
 os.makedirs('l10n_installer/processed', exist_ok=True)
+os.makedirs('l10n_installer/settings', exist_ok=True)
 log_file_path = f'l10n_installer/logs/output_{time.time_ns()}.log'
 with open(log_file_path, 'w', encoding="utf-8") as log:
     exit_with_confirm = True
