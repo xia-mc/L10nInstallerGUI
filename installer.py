@@ -27,7 +27,7 @@ from pathlib import Path
 import polib
 import requests
 
-version = "2024.06.21.0958"
+version = "2024.06.28.1032"
 
 base_path: str = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
 resource_path: str = os.path.join(base_path, "resources")
@@ -66,6 +66,13 @@ text_mo_source = '''汉化文件来源：
 '''
 
 text_mo_source_selection = "请选择汉化文件来源："
+
+text_download_server = '''下载服务器：
+1.（默认）湖南S3
+2.（备用）香港
+'''
+
+text_download_server_selection = "请选择下载服务器："
 
 text_use_builtin = "是否使用程序自带备用文件？输入Y以同意。若上次安装后游戏字符仍被显示为空心方块，请考虑使用备用文件。"
 
@@ -245,22 +252,26 @@ def run():
         if not installation_cfg:
             input("汉化文件安装完成，请不要退出程序，按回车键继续。")
     elif installation_locale == 2:
+        first_mo_dir_found = os.path.isdir(_get_mo_dir_path(first, server))
         first_mo_path = _get_mo_path(first, server)
         first_mo_found = os.path.isfile(first_mo_path)
-        if not first_mo_found:
+        if not first_mo_dir_found or not first_mo_found:
             print(f"未在{first}版本文件夹下找到global.mo文件")
         else:
             shutil.copy(first_mo_path, str(first_mo_path) + ".old")
-        shutil.copy(global_mo_path, first_mo_path)
+        if first_mo_dir_found:
+            shutil.copy(global_mo_path, first_mo_path)
 
-        second_mo_path = _get_mo_path(second, server)
-        second_mo_found = os.path.isfile(second_mo_path)
         if second_dir_exists:
-            if not second_mo_found:
+            second_mo_dir_found = os.path.isdir(_get_mo_dir_path(second, server))
+            second_mo_path = _get_mo_path(second, server)
+            second_mo_found = os.path.isfile(second_mo_path)
+            if not second_mo_dir_found or not second_mo_found:
                 print(f"未在{second}版本文件夹下找到global.mo文件")
             else:
                 shutil.copy(second_mo_path, str(second_mo_path) + ".old")
-            shutil.copy(global_mo_path, second_mo_path)
+            if second_mo_dir_found:
+                shutil.copy(global_mo_path, second_mo_path)
         if not installation_cfg:
             input("汉化文件安装完成，请不要退出程序，按回车键继续。")
     else:
@@ -284,15 +295,17 @@ def run():
     if needs_cfg and installation_cfg != 0:
         first_cfg_path = _get_locale_cfg_path(first)
         second_cfg_path = _get_locale_cfg_path(second)
-        if not use_builtin_cfg and not os.path.isfile(first_cfg_path) and not os.path.isfile(second_cfg_path):
+        first_cfg_exists = os.path.isdir(_get_res_path(first)) and os.path.isfile(first_cfg_path)
+        second_cfg_exists = os.path.isdir(_get_res_path(second)) and os.path.isfile(second_cfg_path)
+        if not use_builtin_cfg and not first_cfg_exists and not second_cfg_exists:
             print("未在指定的文件夹下找到locale_config.xml文件，将使用程序自带的备用文件。")
             use_builtin_cfg = True
         if installation_cfg == 2:
             if not use_builtin_cfg:
-                if not _modify_cfg(first_cfg_path, first_cfg_path, True):
+                if not first_cfg_exists or not _modify_cfg(first_cfg_path, first_cfg_path, True):
                     use_builtin_cfg = True
                 if second_dir_exists:
-                    if not _modify_cfg(second_cfg_path, second_cfg_path, True):
+                    if not second_cfg_exists or not _modify_cfg(second_cfg_path, second_cfg_path, True):
                         use_builtin_cfg = True
                 if use_builtin_cfg:
                     confirm = input(
@@ -303,9 +316,10 @@ def run():
                 else:
                     input("安装已结束，按回车键继续。")
                     return
-            with open(first_cfg_path, "w", encoding="utf-8") as file:
-                file.write(text_builtin_cfg)
-            if second_dir_exists:
+            if first_cfg_exists:
+                with open(first_cfg_path, "w", encoding="utf-8") as file:
+                    file.write(text_builtin_cfg)
+            if second_dir_exists and second_cfg_exists:
                 with open(second_cfg_path, "w", encoding="utf-8") as file:
                     file.write(text_builtin_cfg)
             input("安装已结束，按回车键继续。")
@@ -336,6 +350,11 @@ def run():
         input("已跳过语言配置文件安装，按回车键继续。")
 
 
+def _get_mo_dir_path(game_version: str, server: str) -> Path:
+    return Path("bin").joinpath(game_version).joinpath("res").joinpath("texts").joinpath(server).joinpath(
+        "LC_MESSAGES")
+
+
 def _get_mo_path(game_version: str, server: str) -> Path:
     return Path("bin").joinpath(game_version).joinpath("res").joinpath("texts").joinpath(server).joinpath(
         "LC_MESSAGES").joinpath("global.mo")
@@ -346,6 +365,10 @@ def _get_res_mods_mo_path(game_version: str, server: str) -> Path:
         "LC_MESSAGES")
     os.makedirs(dir_path, exist_ok=True)
     return dir_path.joinpath("global.mo")
+
+
+def _get_res_path(game_version: str) -> Path:
+    return Path("bin").joinpath(game_version).joinpath("res")
 
 
 def _get_locale_cfg_path(game_version: str) -> Path:
@@ -381,15 +404,18 @@ def _fetch_l10n_mo() -> str:
     selection = input(text_mo_source_selection)
     release_selected = selection == '1' or selection == ''
     if release_selected or selection == '2':
-        return _download_mo(release_selected)
+        print(text_download_server)
+        download_server_selection = input(text_download_server_selection)
+        return _download_mo(release_selected, download_server_selection != '2')
     return input("请输入您下载的mo文件的绝对路径，您可以尝试将文件直接拖入本程序运行的命令行页面以快速输入：")
 
 
-def _download_mo(release: bool) -> str:
+def _download_mo(release: bool, main: bool) -> str:
     suffix = "release" if release else "pt"
     artifact_version = "1.0.0" if release else "2.0.0"
     output_file = f"l10n_installer/downloads/l10n_{suffix}.zip"
-    artifact_url = "https://maven.nova-committee.cn/releases/korabli/localized/l10n/" \
+    server_type = "s3" if main else "releases"
+    artifact_url = f"https://maven.nova-committee.cn/{server_type}/korabli/localized/l10n/" \
                    f"{artifact_version}/l10n-{artifact_version}.jar"
     proxies = {scheme: proxy for scheme, proxy in urllib.request.getproxies().items()}
     print("连接中……")
@@ -425,6 +451,9 @@ def _download_mo(release: bool) -> str:
                         prop_author = properties.get("Author")
                         if prop_author:
                             print(f"项目作者：{prop_author}")
+                        prop_version = properties.get("Version")
+                        if prop_version:
+                            print(f"适用版本：{prop_version}")
                         prop_timestamp = properties.get("Timestamp")
                         if prop_timestamp:
                             timestamp_splitted = prop_timestamp.split('T')
@@ -540,7 +569,6 @@ def _process_modification_file(source_po, translated_path: str):
                     _notify_addition_plural(t_entry.msgid, t_entry.msgstr_plural)
                 else:
                     _notify_addition(t_entry.msgid, t_entry.msgstr)
-    source_po.sort()
 
 
 def _get_report_choice(str_path: str) -> str:
