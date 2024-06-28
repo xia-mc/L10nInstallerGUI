@@ -27,6 +27,8 @@ from pathlib import Path
 import polib
 import requests
 
+# from gui import print, input
+
 version = "2024.06.28.1032"
 
 base_path: str = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
